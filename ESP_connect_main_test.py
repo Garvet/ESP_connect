@@ -12,15 +12,25 @@ PORT = 3334  # Listening port (unprivileged ports > 1023)
 #   for filling with objects of type "Module", example and
 #   content types see in "ESP_connect_classes.py"
 devices_command = []
-num_send = 10
-modules_data = Module(module_id='030712220c0dc2d24c01c402',
-                      module_data=[
-                          {'component': 'Signal_digital',
-                           'number': 0,
-                           'value': True
-                           }
-                      ],
-                      time='')
+num_send_mode = 10
+modules_data_mode = Module(module_id='030712220c0dc2d24c01c402',
+                           module_data=[
+                             {'component': 'Signal_digital',
+                              'number': 0,
+                              'value': True
+                              }
+                           ],
+                           time='')
+num_send_value = 10
+value_send_value = 4095
+modules_data_value = Module(module_id='030712220c0dc2d24c01c402',
+                            module_data=[
+                              {'component': 'Signal_PWM',
+                               'number': 0,
+                               'value': 4095
+                               }
+                            ],
+                            time='')
 
 if __name__ == '__main__':
     socket = init_esp_connect(host=HOST, port=PORT)  # init
@@ -42,12 +52,33 @@ if __name__ == '__main__':
             print()
         else:  # report = None
             print('.', end='')
-            num_send -= 1
-            if num_send == 0:
-                if modules_data.data[0]['value']:
-                    modules_data.data[0]['value'] = False  # False
-                else:
-                    modules_data.data[0]['value'] = True  # True
-                devices_command.append(modules_data)
-                print('|')
-                num_send = 30
+            send_packet = [
+                # 'send_mode_packet',
+                'send_value_packet',
+            ]
+            if 'send_mode_packet' in send_packet:
+                num_send_mode -= 1
+                if num_send_mode == 0:
+                    if modules_data_mode.data[0]['value']:
+                        modules_data_mode.data[0]['value'] = False  # False
+                    else:
+                        modules_data_mode.data[0]['value'] = True  # True
+                    devices_command.append(modules_data_mode)
+                    print('|')
+                    num_send_mode = 30
+            if 'send_value_packet' in send_packet:
+                num_send_value -= 1
+                if num_send_value == 0:
+                    if modules_data_value.data[0]['value'] == 4095:    # { 100% }
+                        modules_data_mode.data[0]['value'] = 3071
+                    elif modules_data_value.data[0]['value'] == 3071:  # {  75% }
+                        modules_data_mode.data[0]['value'] = 2047
+                    elif modules_data_value.data[0]['value'] == 2047:  # {  50% }
+                        modules_data_mode.data[0]['value'] = 1023
+                    elif modules_data_value.data[0]['value'] == 1023:  # {  25% }
+                        modules_data_mode.data[0]['value'] = 0
+                    else:                                              # {   0% }
+                        modules_data_mode.data[0]['value'] = 4095
+                    devices_command.append(modules_data_mode)
+                    print('|')
+                    num_send_value = 45
