@@ -117,6 +117,8 @@ def receive_esp_report(esp_socket, command=None):
                     command.pop(0)
                 else:
                     conn.sendall(b'Receive correct.\r\n')
+                    if isinstance(command, list) and len(command) > 0:
+                        command.pop(0)
 
             finally:
                 conn.settimeout(None)
