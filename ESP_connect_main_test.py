@@ -17,7 +17,7 @@ modules_data_mode = Module(module_id='030712220c0dc2d24c01c402',
                            module_data=[
                              {'component': 'Signal_digital',
                               'number': 0,
-                              'value': True
+                              'value': True  # False - STOP, True - WORK
                               }
                            ],
                            time='')
@@ -27,10 +27,11 @@ modules_data_value = Module(module_id='030712220c0dc2d24c01c402',
                             module_data=[
                               {'component': 'Signal_PWM',
                                'number': 0,
-                               'value': 4095
+                               'value': 4095  # Set value in {0, ..., 4095}
                                }
                             ],
                             time='')
+send = False
 
 if __name__ == '__main__':
     socket = init_esp_connect(host=HOST, port=PORT)  # init
@@ -51,6 +52,8 @@ if __name__ == '__main__':
             print("attached_id = " + str(registration_data.attachedId))
             print()
         else:  # report = None
+            if not send:
+                continue
             print('.', end='')
             send_packet = [
                 # 'send_mode_packet',
@@ -64,21 +67,21 @@ if __name__ == '__main__':
                     else:
                         modules_data_mode.data[0]['value'] = True  # True
                     devices_command.append(modules_data_mode)
-                    print('|')
+                    print('|S|')
                     num_send_mode = 30
             if 'send_value_packet' in send_packet:
                 num_send_value -= 1
                 if num_send_value == 0:
                     if modules_data_value.data[0]['value'] == 4095:    # { 100% }
-                        modules_data_mode.data[0]['value'] = 3071
+                        modules_data_value.data[0]['value'] = 3071
                     elif modules_data_value.data[0]['value'] == 3071:  # {  75% }
-                        modules_data_mode.data[0]['value'] = 2047
+                        modules_data_value.data[0]['value'] = 2047
                     elif modules_data_value.data[0]['value'] == 2047:  # {  50% }
-                        modules_data_mode.data[0]['value'] = 1023
+                        modules_data_value.data[0]['value'] = 1023
                     elif modules_data_value.data[0]['value'] == 1023:  # {  25% }
-                        modules_data_mode.data[0]['value'] = 0
+                        modules_data_value.data[0]['value'] = 0
                     else:                                              # {   0% }
-                        modules_data_mode.data[0]['value'] = 4095
-                    devices_command.append(modules_data_mode)
-                    print('|')
+                        modules_data_value.data[0]['value'] = 4095
+                    devices_command.append(modules_data_value)
+                    print('|V|')
                     num_send_value = 45
