@@ -3,18 +3,25 @@
 Классы для контроля общения между модулем управления группой и сервером.
 
 В данном модуле описаны следующие классы пакетов:
-- C{Packet} : Общий класс пакетов;
-- C{SystemRegistration} : Класс пакета завершения регистрации;
-- C{Module} : Класс пакета отчётов компонентов;
-- C{SystemControl} : Класс пакета состояний модуля;
-- C{Error} : Класс пакета ошибок;
-- C{Check} : Класс пакета проверки наличия команд;
-- C{SystemSetting} : Класс пакета настройки системы.
+(+) 0xFF - C{Packet} : Общий класс пакетов;
+(-) 0x00 - C{SystemRegistration} : Класс пакета завершения регистрации;
+(-) 0x01 - C{Module} : Класс пакета отчётов компонентов;
+(+) 0x02 - C{SystemControl} : Класс пакета состояний модуля;
+(+) 0x03 - C{TimeControl} : Класс пакета контроля времени;
+(+) 0x04 - C{Error} : Класс пакета ошибок;
+(-) 0x05 - C{Check} : Класс пакета проверки наличия команд;
+(-) 0x06 - C{SystemSetting} : Класс пакета настройки системы;
+(+) 0x07 - C{ACS} : Класс пакетов связанных с системой контроля доступа;
+ (+) 0x00 - C{DetectRFID} : Класс покета сообщения сигнала со СКУДов;
+ (+) 0x01 - C{TurnstileControl} : Класс покета управления турникетом;
+ (+) 0x02 - C{RFIDListControl} : Класс пакета управления RFID-списка на СКУДе;
+ (+) 0x03 - C{} : Класс пакета реакции изменения RFID-списка на СКУДе.
 """
 # В файле есть (-) -----
 import ESP_connect_interface_data as PEnum
 import ESP_connect_bytelist as PByte
 
+import datetime
 
 # Create send packet (ByteList->header|data|CRC) (-) ----- (+/-) data -> CRC in ESP_connect_bytelist
 # Read receive packet (header|data|CRC->ByteList) (-) ----- (+/-) del CRC in ESP_connect_bytelist
@@ -47,55 +54,58 @@ def check_id(string_id: str):
     return False
 
 
-def get_PT_num(search_value):
+def get_PT_num(search_value, search_area='Packet'):
     """ Получение номера типа пакета
 
     @param search_value : С{str} название типа пакета.
                           С{type(Packet)} тип пакета.
+    @param search_area : C{Dict} область поиска типа
     @return : C{int} номер типа пакета.
               C{None} ошибка поиска.
     """
-    if search_value in [value for key, values in packet_type.items() for value in values.values()]:
+    if search_value in [value for key, values in packet_type[search_area].items() for value in values.values()]:
         if isinstance(search_value, str):
-            return [key for key, value in packet_type.items() if value['name'] == search_value][0]
+            return [key for key, value in packet_type[search_area].items() if value['name'] == search_value][0]
         elif issubclass(search_value, Packet):
-            return [key for key, value in packet_type.items() if value['class'] == search_value][0]
+            return [key for key, value in packet_type[search_area].items() if value['class'] == search_value][0]
     return None
 
 
-def get_PT_name(search_value):
+def get_PT_name(search_value, search_area='Packet'):
     """ Получение названия типа пакета
 
     @param search_value : С{int} номер типа пакета.
                           С{type(Packet)} тип пакета.
+    @param search_area : C{Dict} область поиска типа
     @return : C{str} название типа пакета.
               C{None} ошибка поиска.
     """
     if isinstance(search_value, int):
-        if search_value not in packet_type:
+        if search_value not in packet_type[search_area]:
             return None
-        return packet_type[search_value]['name']
+        return packet_type[search_area][search_value]['name']
     elif issubclass(search_value, Packet):
-        if search_value in [value for key, values in packet_type.items() for value in values.values()]:
-            return packet_type[get_PT_num(search_value)]['name']
+        if search_value in [value for key, values in packet_type[search_area].items() for value in values.values()]:
+            return packet_type[search_area][get_PT_num(search_value)]['name']
     return None
 
 
-def get_PT(search_value):
+def get_PT(search_value, search_area='Packet'):
     """ Получение типа пакета
 
     @param search_value : С{int} номер типа пакета.
                           С{str} название типа пакета.
+    @param search_area : C{Dict} область поиска типа
     @return : C{type(Packet)} тип пакета.
               C{None} ошибка поиска.
     """
     if isinstance(search_value, int):
-        if search_value not in packet_type:
+        if search_value not in packet_type[search_area]:
             return None
-        return packet_type[search_value]['class']
+        return packet_type[search_area][search_value]['class']
     elif isinstance(search_value, str):
-        if search_value in [value for key, values in packet_type.items() for value in values.values()]:
-            return packet_type[get_PT_num(search_value)]['class']
+        if search_value in [value for key, values in packet_type[search_area].items() for value in values.values()]:
+            return packet_type[search_area][get_PT_num(search_value)]['class']
     return None
 
 
@@ -234,156 +244,6 @@ class Packet(object):
     """
 
 
-# Проверка содержимого attached_id на соответствие (-) -----
-# ByteList->Packet (-) -----
-# Packet->ByteList (-) -----
-class SystemRegistration(Packet):
-    """Класс пакета завершения регистрации
-
-    Пакет который отправляется в момент завершения регистрации, содержит в себе
-    имя конфигурации, а также массив ID всех компонентов с соответствующими этим
-    ID именами.
-    """
-    type_name = 'SystemRegistration'
-
-    def __init__(self, name: str, attached_id: list,
-                 packet=None, group_id: str = None, time: str = None):
-        """Конструктор пакета завершения регистрации
-
-        @param name : C{str} - Имя контейнера.
-        @param attached_id : C{list} - Массив состоящий из словарей, где ключём является строка ID, состоящая
-        из 12 символов в шестнадцатиричном виде, а значением строка имени модуля в контейнере.
-        @param packet : C{SystemRegistration}/C{dict} - - см. Packet.
-        @param group_id : C{str} - см. Packet.
-        @param time : C{str} - см. Packet.
-        """
-        self.container_name = ''
-        self.attached_id = []
-        if isinstance(packet, SystemRegistration) or isinstance(packet, dict):
-            super().__init__(packet=packet)
-        else:
-            super().__init__(group_id=group_id, time=time)
-        self.class_error[SystemRegistration.type_name] = []
-        self.type = get_PT_num(SystemRegistration.type_name)
-        self.container_name = ''
-        self.attached_id = []
-        # Конструктор по значению
-        if isinstance(name, str) and isinstance(attached_id, list):
-            self.container_name = name
-            self.attached_id = attached_id
-        # Конструктор копирования
-        elif isinstance(packet, SystemRegistration):
-            self.container_name = packet.container_name
-            self.attached_id = packet.attached_id
-        # Конструктор из словаря
-        elif isinstance(packet, dict) and packet.keys() >= {'container_name', 'attached_id'}:
-            self.container_name = packet['container_name']
-            self.attached_id = packet['attached_id']
-        # Ошибка конструирования
-        else:
-            self.class_error[SystemRegistration.type_name].append('__init__: Invalid parameters type.')
-
-    def get_class_error(self, one_mas: bool = False):
-        """Возврат ошибок класса
-
-        @param one_mas : C{bool} - см. Packet.
-        @return: см. Packet.
-        """
-        if isinstance(one_mas, bool):
-            if one_mas:
-                return super().get_class_error(one_mas) + self.class_error[SystemRegistration.type_name]
-            else:
-                return self.class_error
-        else:
-            self.class_error[SystemRegistration.type_name].append('get_class_error: Invalid parameters type.')
-            return
-
-    # get_packet_len (-) -----
-    def get_packet_len(self):
-        length = super().get_packet_len() + 1 + len(self.container_name) + 2
-        for component in self.attached_id:
-            length += 12 + 1 + len(component['name'])
-        return length
-
-    # ByteList->Packet (-) -----
-    # Packet->ByteList (-) -----
-
-    @staticmethod
-    def object_creator(byte):
-        """Генератор объекта
-
-        @return: созданный объект
-        """
-        p_group_id = byte['group_id']
-        p_time = byte['time']
-        p_name = byte['name']
-        p_attached_id = byte['attached_id']
-        return SystemRegistration(name=p_name, attached_id=p_attached_id, group_id=p_group_id, time=p_time)
-
-
-# Провероки: (-) -----
-# - на type
-# - на поля data
-# - на содержимое полей data (с учётом type)
-# get_packet_len (-) -----
-# ByteList->Packet (-) -----
-# Packet->ByteList (-) -----
-class Module(Packet):
-    type_name = 'Module'
-
-    def __init__(self, module_id, module_type, module_data,
-                 packet=None, group_id: str = None, time: str = None):
-        if isinstance(packet, Module) or isinstance(packet, dict):
-            super().__init__(packet=packet)
-        else:
-            super().__init__(group_id=group_id, time=time)
-        self.class_error[Module.type_name] = []
-        self.type = get_PT_num(Module.type_name)
-        self.module_id = ''
-        self.module_type = ''
-        self.module_data = None  # module_data ?
-        # Конструктор по значению
-        if isinstance(module_id, str) and isinstance(module_type, str):  # module_data ?
-            self.module_id = module_id
-            self.module_type = module_type
-            self.module_data = module_data
-        # Конструктор копирования
-        elif isinstance(packet, Module):
-            self.module_id = packet.module_id
-            self.module_type = packet.module_type
-            self.module_data = packet.module_data
-        # Конструктор из словаря
-        elif isinstance(packet, dict) and packet.keys() >= {'module_id', 'module_type', 'module_data'}:
-            self.module_id = packet['module_id']
-            self.module_type = packet['module_type']
-            self.module_data = packet['module_data']
-        # Ошибка конструирования
-        else:
-            self.class_error[Module.type_name].append('__init__: Invalid parameters type.')
-
-    def get_class_error(self, one_mas: bool = False):
-        """Возврат ошибок класса
-
-        @param one_mas : C{bool} - см. Packet.
-        @return: см. Packet.
-        """
-        if isinstance(one_mas, bool):
-            if one_mas:
-                return super().get_class_error(one_mas) + self.class_error[Module.type_name]
-            else:
-                return self.class_error
-        else:
-            self.class_error[Module.type_name].append('get_class_error: Invalid parameters type.')
-            return
-
-    # get_packet_len (-) -----
-    def get_packet_len(self):
-        return 24
-
-    # ByteList->Packet (-) -----
-    # Packet->ByteList (-) -----
-
-
 # ByteList->Packet (-) -----
 # Packet->ByteList (-) -----
 class SystemControl(Packet):
@@ -397,6 +257,75 @@ class SystemControl(Packet):
     type_name = 'SystemControl'
 
     def __init__(self, module_id: str, state: str,
+                 packet=None, group_id: str = None, time: str = None):
+        """Конструктор пакета состояний модуля
+
+        @param module_id : C{str} - ID компонента, состоящее из 12 символов в шестнадцатиричном виде.
+        @param state : C{str} - Состояние компонента [см. state_system].
+        @param packet : C{SystemControl}/C{dict} - см. Packet.
+        @param group_id : C{str} - см. Packet.
+        @param time : C{str} - см. Packet.
+        """
+        if isinstance(packet, SystemControl) or isinstance(packet, dict):
+            super().__init__(packet=packet)
+        else:
+            super().__init__(group_id=group_id, time=time)
+        self.class_error[SystemControl.type_name] = []
+        self.type = get_PT_num(SystemControl.type_name)
+        self.module_id = ''
+        self.state = ''
+        # Конструктор по значению
+        if isinstance(module_id, str) and isinstance(state, str):
+            if state in PEnum.state_system.values():
+                self.module_id = module_id
+                self.state = state
+            else:
+                self.class_error[SystemControl.type_name].append('__init__: Invalid state system.')
+        # Конструктор копирования
+        elif isinstance(packet, SystemControl):
+            self.module_id = packet.module_id
+            self.state = packet.state
+        # Конструктор из словаря
+        elif isinstance(packet, dict) and packet.keys() >= {'module_id', 'state'}:
+            self.module_id = packet['module_id']
+            self.state = packet['state']
+        # Ошибка конструирования
+        else:
+            self.class_error[SystemControl.type_name].append('__init__: Invalid parameters type.')
+
+    def get_class_error(self, one_mas: bool = False):
+        """Возврат ошибок класса
+
+        @param one_mas : C{bool} - см. Packet.
+        @return: см. Packet.
+        """
+        if isinstance(one_mas, bool):
+            if one_mas:
+                return super().get_class_error(one_mas) + self.class_error[SystemControl.type_name]
+            else:
+                return self.class_error
+        else:
+            self.class_error[SystemControl.type_name].append('get_class_error: Invalid parameters type.')
+            return
+
+    def get_packet_len(self):
+        return super().get_packet_len() + 13
+
+    # ByteList->Packet (-) -----
+    # Packet->ByteList (-) -----
+
+
+# ByteList->Packet (-) -----
+# Packet->ByteList (-) -----
+class TimeControl(Packet):
+    """Пакет управления временем модуля
+
+    Пакет управления временем в системе узлов. Содержит в себе поле с самим ID
+    и поля даты и времени.
+    """
+    type_name = 'TimeControl'
+
+    def __init__(self, module_id: str, state: datetime.datetime,
                  packet=None, group_id: str = None, time: str = None):
         """Конструктор пакета состояний модуля
 
@@ -664,13 +593,95 @@ class SystemSetting(Packet):
     # Packet->ByteList (-) -----
 
 
-packet_type = {0xFF: {'name': Packet.type_name,             'class': Packet},
-               0x00: {'name': SystemRegistration.type_name, 'class': SystemRegistration},
-               0x01: {'name': Module.type_name,             'class': Module},
-               0x02: {'name': SystemControl.type_name,      'class': SystemControl},
-               0x03: {'name': Error.type_name,              'class': Error},
-               0x04: {'name': Check.type_name,              'class': Check},
-               0x05: {'name': SystemSetting.type_name,      'class': SystemSetting}}
+# get_packet_len (-) -----
+# ByteList->Packet (-) -----
+# Packet->ByteList (-) -----
+class ACS(Packet):
+    """Пакеты настройки системы
+
+    Класс подготовленный для будущего. В нём будут дочерние пакеты (или
+    определённые поля), позволяющие осуществлять контроль над настройками
+    группы, т.е. производить регистрацию и замену модулей, передавать
+    данные о контейнере и технологии выращивания (конфигурацию).
+    """
+    type_name = 'SystemSetting'
+
+    def __init__(self, packet=None, group_id: str = None, time: str = None):
+        """Конструктор пакета настройки системы
+
+        @param packet : C{SystemSetting}/C{dict} - см. Packet.
+        @param group_id : C{str} - см. Packet.
+        @param time : C{str} - см. Packet.
+        """
+        if isinstance(packet, SystemSetting) or isinstance(packet, dict):
+            super().__init__(packet=packet)
+        else:
+            super().__init__(group_id=group_id, time=time)
+        self.class_error[SystemSetting.type_name] = []
+        self.type = get_PT_num(SystemSetting.type_name)
+
+        # Конструктор по значению
+        if isinstance(None, str):
+            pass
+        # Конструктор копирования
+        elif isinstance(packet, SystemSetting):
+            pass
+        # Конструктор из словаря
+        elif isinstance(packet, dict) and packet.keys() >= {''}:
+            pass
+        # Ошибка конструирования
+        else:
+            pass
+            # self.class_error[SystemSetting.type_name].append('__init__: Invalid parameters type.')
+
+    def get_class_error(self, one_mas: bool = False):
+        """Возврат ошибок класса
+
+        @param one_mas : C{bool} - см. Packet.
+        @return: см. Packet.
+        """
+        if isinstance(one_mas, bool):
+            if one_mas:
+                return super().get_class_error(one_mas) + self.class_error[SystemSetting.type_name]
+            else:
+                return self.class_error
+        else:
+            self.class_error[SystemSetting.type_name].append('get_class_error: Invalid parameters type.')
+            return
+
+    # get_packet_len (-) -----
+    def get_packet_len(self):
+        return 24
+
+    # ByteList->Packet (-) -----
+    # Packet->ByteList (-) -----
+
+
+# packet_type = {0xFF: {'name': Packet.type_name,             'class': Packet},
+#                0x00: {'name': SystemRegistration.type_name, 'class': SystemRegistration},
+#                0x01: {'name': Module.type_name,             'class': Module},
+#                0x02: {'name': SystemControl.type_name,      'class': SystemControl},
+#                0x03: {'name': Error.type_name,              'class': Error},
+#                0x04: {'name': Check.type_name,              'class': Check},
+#                0x05: {'name': SystemSetting.type_name,      'class': SystemSetting}}
+
+packet_type = dict()
+packet_type['Packet'] = {0xFF: {'name': Packet.type_name,             'class': Packet},
+                         # 0x00: {'name': SystemRegistration.type_name, 'class': SystemRegistration},
+                         # 0x01: {'name': Module.type_name,             'class': Module},
+                         0x02: {'name': SystemControl.type_name,      'class': SystemControl},
+                         0x03: {'name': TimeControl.type_name,        'class': TimeControl},
+                         0x04: {'name': Error.type_name,              'class': Error},
+                         # 0x05: {'name': Check.type_name,              'class': Check},
+                         # 0x06: {'name': SystemSetting.type_name,      'class': SystemSetting}
+                         0x07: {'name': ACS.type_name,                'class': ACS}
+                         }
+
+packet_type['ACS'] = {0x00: {'name': Packet.type_name,             'class': Packet},  # DetectRFID
+                      0x01: {'name': Packet.type_name,             'class': Packet},  # TurnstileControl
+                      0x02: {'name': Packet.type_name,             'class': Packet},  # RFIDListControl
+                      0x03: {'name': Packet.type_name,             'class': Packet}   # (-) -----
+                      }
 
 
 #

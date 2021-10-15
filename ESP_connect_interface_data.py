@@ -15,13 +15,15 @@ import ESP_connect_classes as Pcls
 
 module_type = {0x00: 'Group control module',
                0x01: 'Sensor',
-               0x02: 'Device'}
+               0x02: 'Device',
+               0x03: 'Access control system'}
 """ @var module_type
 
 C{dict} - словарь типов узлов системы. Номер и соответствующее ему название.
 • 0x00: 'Group control module' - Модуль управления группой (МУГ)
 • 0x01: 'Sensor' - Датчик
 • 0x02: 'Device' - Устройство
+• 0x03: 'Access control system' - Система контроля управления доступом (СКУД)
 """
 
 
