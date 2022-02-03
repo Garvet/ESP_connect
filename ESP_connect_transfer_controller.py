@@ -119,6 +119,7 @@ class WireTransferController(object):
         self.send_len = len(buffer)
         self.send_status = Status.Ok
         self.stage = Stage.Sent_initialization_byte
+        self.amt_error = 0
 
         for ind, num in enumerate(buffer):
             self.send_buffer[ind] = num
@@ -196,6 +197,7 @@ class WireTransferController(object):
                 self.stage = Stage.Received_initialization_byte
                 self.last_send_byte = 0xDB
                 self.send(self.last_send_byte)
+                self.amt_error = 0
             else:
                 self.last_receive_byte[0] = 0
                 self.receive(self.last_receive_byte)
@@ -213,10 +215,14 @@ class WireTransferController(object):
                 self.send(self.last_send_byte)
         elif self.stage == Stage.Received_length_byte:
             # проверяю на 0xFF, если есть инверсия длины, принимаю серию байт, если 0 ожидаю байт длины
+            check_byte = (((~self.receive_len) & 0xFF) << 4 & 0xF0) | (((~self.receive_len) & 0xFF) >> 4 & 0x0F)
             if self.last_receive_byte[0] == 0xFF:
                 self.stage = Stage.Received_initialization_byte
-            else:
+            elif self.last_receive_byte[0] == check_byte:
                 self.stage = Stage.Receive_bytes
+            else:
+                self.stage = Stage.No_transmission
+                self.receive_status = Status.Error
             self.receive(self.last_receive_byte)
         elif self.stage == Stage.Receive_bytes:
             # принимаем байты, если все - то ожидаем последний байт
