@@ -82,6 +82,8 @@ class WireTransferController(object):
         self.receive_buffer = array.array('i', [0]) * BUFFER_SIZE  # буфер приёма
         self.receive_len = 0  # ожидаемая длина
         self.receive_cnt = 0  # принятое количество
+        self.amt_error = 0  # количество произошедших ошибок
+        self.max_amt_error = 5  # максимальное количество произошедших ошибок
         self.last_receive_byte = [0]  # последний принятый байт
         self.receive_status = Status.Ok  # статус приёма
         self.stage = Stage.No_transmission  # текущая стадия
@@ -114,7 +116,7 @@ class WireTransferController(object):
         if (self.stage != Stage.No_transmission) or (BUFFER_SIZE < len(buffer)):
             return True
         self.send_cnt = 0
-        self.send_len = len
+        self.send_len = len(buffer)
         self.send_status = Status.Ok
         self.stage = Stage.Sent_initialization_byte
 
@@ -190,35 +192,35 @@ class WireTransferController(object):
         """ Завершён приём байта """
         if self.stage == Stage.No_transmission:
             # начало отправки с другой стороны, отправить реакцию игнор
-            if self.last_receive_byte == 0xA5:
+            if self.last_receive_byte[0] == 0xA5:
                 self.stage = Stage.Received_initialization_byte
                 self.last_send_byte = 0xDB
                 self.send(self.last_send_byte)
             else:
-                self.last_receive_byte = 0
+                self.last_receive_byte[0] = 0
                 self.receive(self.last_receive_byte)
         elif self.stage == Stage.Received_initialization_byte:
             # проверяю на 0, если есть длина, отправляю инверсию, если 0 ожидаю начало инициализации
-            if self.last_receive_byte == 0:
+            if self.last_receive_byte[0] == 0:
                 self.stage = Stage.No_transmission
                 self.receive(self.last_receive_byte)
-            elif self.last_receive_byte == 0xFF:
+            elif self.last_receive_byte[0] == 0xFF:
                 self.receive(self.last_receive_byte)
             else:
                 self.stage = Stage.Received_length_byte
-                self.receive_len = self.last_receive_byte
+                self.receive_len = self.last_receive_byte[0]
                 self.last_send_byte = ((~self.receive_len) & 0xFF)
                 self.send(self.last_send_byte)
         elif self.stage == Stage.Received_length_byte:
             # проверяю на 0xFF, если есть инверсия длины, принимаю серию байт, если 0 ожидаю байт длины
-            if self.last_receive_byte == 0xFF:
+            if self.last_receive_byte[0] == 0xFF:
                 self.stage = Stage.Received_initialization_byte
             else:
                 self.stage = Stage.Receive_bytes
             self.receive(self.last_receive_byte)
         elif self.stage == Stage.Receive_bytes:
             # принимаем байты, если все - то ожидаем последний байт
-            self.receive_buffer[self.receive_cnt] = self.last_receive_byte
+            self.receive_buffer[self.receive_cnt] = self.last_receive_byte[0]
             self.receive_cnt += 1
             self.receive(self.last_receive_byte)
             if self.receive_cnt == self.receive_len:
@@ -226,7 +228,7 @@ class WireTransferController(object):
                 self.stage = Stage.Expect_trailing_byte
         elif self.stage == Stage.Expect_trailing_byte:
             # Принимаем завершающий байт
-            if self.last_receive_byte == 0x5A:
+            if self.last_receive_byte[0] == 0x5A:
                 self.last_send_byte = 0x24
                 self.send(self.last_send_byte)
             else:
@@ -235,13 +237,13 @@ class WireTransferController(object):
                 # (-) ----- отправить инициализирующий пакет, если ожидаем?
         elif self.stage == Stage.Sent_initialization_byte:
             # Реакция на инициализирующий пакет
-            if self.last_receive_byte == 0xDB:
+            if self.last_receive_byte[0] == 0xDB:
                 # отправить длину
                 self.stage = Stage.Sent_length_byte
                 self.last_send_byte = self.send_len
                 self.send(self.last_send_byte)
 
-            elif self.last_receive_byte == 0xA5:
+            elif self.last_receive_byte[0] == 0xA5:
                 # (-) ----- проверка на приоритет, если я важнее, то реагируем как в
                 #       Received_initialization_byte, если нет - то отправить 0xDB
                 self.last_send_byte = 0xDB
@@ -251,10 +253,10 @@ class WireTransferController(object):
                 self.send(self.last_send_byte)
         elif self.stage == Stage.Sent_length_byte:
             # Принята инвертированная длина
-            if self.last_receive_byte == ((~self.send_len) & 0xFF):
+            if self.last_receive_byte[0] == ((~self.send_len) & 0xFF):
                 # отправить перемешанную длину
                 self.stage = Stage.Sending_bytes
-                self.last_send_byte = (self.last_receive_byte << 4 & 0xF0) | (self.last_receive_byte >> 4 & 0x0F)
+                self.last_send_byte = (self.last_receive_byte[0] << 4 & 0xF0) | (self.last_receive_byte[0] >> 4 & 0x0F)
                 self.send(self.last_send_byte)
             else:
                 # Ошибка, обнуляю
@@ -265,7 +267,7 @@ class WireTransferController(object):
             pass
         elif self.stage == Stage.Sent_trailing_byte:
             # Принимаем реакцию на завершающий байт
-            if self.last_receive_byte == 0x24:
+            if self.last_receive_byte[0] == 0x24:
                 self.stage = Stage.No_transmission
                 self.send_status = Status.Exit
             else:
@@ -277,7 +279,7 @@ class WireTransferController(object):
 
     def receive_timeout(self) -> None:
         """ Истекло время ожидания байта """
-        self.last_receive_byte = 0
+        self.last_receive_byte[0] = 0
         if self.stage == Stage.No_transmission:
             self.stage = Stage.No_transmission
             self.receive(self.last_receive_byte)
@@ -287,11 +289,27 @@ class WireTransferController(object):
             self.receive_status = Status.Error
             self.receive(self.last_receive_byte)
         elif self.stage == Stage.Sent_initialization_byte:
-            self.last_send_byte = 0
-            self.send(self.last_send_byte)
+            # (-) ----- зацикливание
+            self.amt_error += 1
+            if self.amt_error == self.max_amt_error:
+                self.amt_error = 0
+                self.stage = Stage.No_transmission
+                self.send_status = Status.Error
+                self.receive(self.last_receive_byte)
+            else:
+                self.last_send_byte = 0
+                self.send(self.last_send_byte)
         elif self.stage == Stage.Sent_length_byte:
-            self.last_send_byte = 0xFF
-            self.send(self.last_send_byte)
+            # (-) ----- зацикливание
+            self.amt_error += 1
+            if self.amt_error == self.max_amt_error:
+                self.amt_error = 0
+                self.stage = Stage.No_transmission
+                self.send_status = Status.Error
+                self.receive(self.last_receive_byte)
+            else:
+                self.last_send_byte = 0xFF
+                self.send(self.last_send_byte)
         elif self.stage == Stage.Sending_bytes:
             pass
         elif self.stage == Stage.Sent_trailing_byte:
