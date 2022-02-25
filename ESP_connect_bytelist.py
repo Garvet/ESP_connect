@@ -170,7 +170,8 @@ class ByteList(object):
         # - соединяет все девятки друг с другом и с CRC
         byte_data = [elem for string in mas for elem in string] + [self.crc_sum]
         # - переводит их в byte
-        return bytearray(byte_data)
+        return byte_data
+        # return bytearray(byte_data)
 
 
 # b_list = ByteList([127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140])
