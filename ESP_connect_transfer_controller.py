@@ -113,6 +113,8 @@ class WireTransferController(object):
             buffer = [buffer]
         if not isinstance(buffer, list):
             return True
+        else:
+            buffer = buffer[:]  # копирование буфера
         if (self.stage != Stage.No_transmission) or (BUFFER_SIZE < len(buffer)):
             return True
         self.send_cnt = 0
@@ -176,8 +178,11 @@ class WireTransferController(object):
         elif self.stage == Stage.Sending_bytes:
             # Отправили байт, отправляем следующий или отправляем конечный
             if self.send_cnt < self.send_len:
-                self.last_send_byte = self.send_buffer[self.send_cnt]
-                self.send_cnt += 1
+                # self.last_send_byte = self.send_buffer[self.send_cnt]
+                # self.send_cnt += 1
+                # self.send(self.last_send_byte)
+                self.last_send_byte = self.send_buffer[:self.send_len]
+                self.send_cnt += len(self.last_send_byte)
                 self.send(self.last_send_byte)
             else:
                 self.stage = Stage.Sent_trailing_byte
