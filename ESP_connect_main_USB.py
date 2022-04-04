@@ -1,7 +1,5 @@
 # coding=utf-8
-import _test_17_2_ESP_connect_UART_controller as Utr
-# import _test_17_4_ESP_connect_objects_ASC as ASC_objects
-# import _test_17_6_ESP_connect_interface as ESP_intr
+import ESP_connect_UART_controller as Utr
 from ESP_connect_package_converter import *
 # import paho.mqtt.client as mqtt
 
