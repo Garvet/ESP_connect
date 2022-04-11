@@ -151,11 +151,13 @@ class DatabaseCommunicator:
         cmds = self.retr.getCommands(self.url, self.id, self.password)
         succ = []
         fail = []
-        if cmds['error'] == 0:
-            for cmd in cmds['commands']:
-                if self.processCommand(cmd['c'], cmd['d']):
-                    succ.append(cmd['id'])
-                else:
-                    fail.append(cmd['id'])
-            self.retr.ackCommands(self.url, self.id, self.password, succ)
-            self.retr.ackCommands(self.url, self.id, self.password, fail, False)
+        if cmds is not None:
+            if cmds['error'] == 0:
+                for cmd in cmds['commands']:
+                    if self.processCommand(cmd['c'], cmd['d']):
+                        succ.append(cmd['id'])
+                    else:
+                        fail.append(cmd['id'])
+                self.retr.ackCommands(self.url, self.id, self.password, succ)
+                self.retr.ackCommands(self.url, self.id, self.password, fail, False)
+
