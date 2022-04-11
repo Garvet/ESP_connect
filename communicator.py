@@ -14,14 +14,34 @@ import urllib.parse
 import json
 import time
 import subprocess
+import os
+import datetime
 
 class CommunicatorConfig:
     permissionIfNoData = True
     commandCheckInterval = 10.0
+    logDir = None
 
 class DataRetriever:
-    def log(self, text):
-        print('LOG: ' + text)
+
+    def writeLog(self, file, url, id, password, message, level = 0, noNet = False):
+        d = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        print('%s %s L%i %s' % (id, d, level, message))
+        try:
+            f = open(file, 'a')
+            f.write('%s %s L%i %s\n' % (id, d, level, message))
+            f.close()
+        except Exception as e:
+            print('Log unwritable.')
+        options = {
+        'action': 'devlog',
+        'dev': id,
+        'pwd': password,
+        'level': level,
+        'text': message
+        }
+        if not noNet:
+            print(self.getURL('%s?%s' % (url, urllib.parse.urlencode(options))))
 
     def getURL(self, url):
         try:
@@ -30,7 +50,6 @@ class DataRetriever:
             data = json.loads(data)
             return data
         except Exception as e:
-            self.log(str(e))
             return None
 
     def getCommands(self, src, login, password):
@@ -54,8 +73,6 @@ class DataRetriever:
             for item in data:
                 if len(item['rfid']) != 8:
                     continue
-                if item['rfid'] in hash:
-                    self.log('Warning: duplicate entry ' + item['rfid'] + ' ' + str(item['id']))
                 hash[item['rfid']] = item['id']
             return hash
         else:
@@ -82,6 +99,20 @@ class DatabaseCommunicator:
         self.id = id
         self.password = password
         self.updateData()
+
+    def getLogDir(self):
+        if self.conf.logDir is None:
+            return os.path.expanduser('~')
+        else:
+            return self.conf.logDir
+
+    def getLogFile(self):
+        return self.getLogDir() + '/' + self.id + '-' + \
+            datetime.date.today().strftime('%Y-%m-%d') + '.log'
+
+    def writeLog(self, message, level = 0):
+        self.retr.writeLog(self.getLogFile(), self.url,  self.id, self.password,
+            message, level)
 
     def updateData(self):
         db = self.retr.getMap(self.url)
@@ -128,4 +159,3 @@ class DatabaseCommunicator:
                     fail.append(cmd['id'])
             self.retr.ackCommands(self.url, self.id, self.password, succ)
             self.retr.ackCommands(self.url, self.id, self.password, fail, False)
-

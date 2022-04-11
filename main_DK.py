@@ -38,11 +38,13 @@ if __name__ == '__main__':
                 #if obj.get_card_id() in correct_id:
                 # проверяем теперь через сервер
                 if dc.checkPermission(obj.get_card_id()):
-                    print(' + Проход разрешён')
+                    dc.writeLog('ALLOW %s %s' % (obj.get_card_id(), obj.get_direction()))
+                    #print(' + Проход разрешён')
                     buffer_object_send.append(ASC_objects.Passage_permission(
                         acs_id=obj.get_acs_id(), card_id=obj.get_card_id(), direction=obj.get_direction()))
                 else:
-                    print(' - Проход запрещён')
+                    dc.writeLog('DENY %s %s' % (obj.get_card_id(), obj.get_direction()))
+                    #print(' - Проход запрещён')
                     buffer_object_send.append(ASC_objects.Passage_prohibition(
                         acs_id=obj.get_acs_id(), card_id=obj.get_card_id()))
         # Отправка пакета на ESP
@@ -59,6 +61,5 @@ if __name__ == '__main__':
 # [20] Utr.size_receive_buffer() - возвращает количество принятых пакетов
 # [21] Возвращает объект на основе принятого пакета ESP_intr.convert_to_object(Utr.receive_data(0))
 # [47] Utr.send_data(ESP_intr.convert_to_packet(<object>) конвертирует и отправляет объект
-
 
 
