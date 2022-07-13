@@ -9,10 +9,16 @@ PACKET_TYPE = {"Pass_request":
                "Add_ID":
                    {"num": 4, "class": ASC_objects.Add_ID, "len": 4, "field": ["card_id"]},
                "Delete_ID":
-                   {"num": 5, "class": ASC_objects.Delete_ID, "len": 4, "field": ["card_id"]}
+                   {"num": 5, "class": ASC_objects.Delete_ID, "len": 4, "field": ["card_id"]},
+
+               "Send_error":
+                   {"num": 0xF0, "class": ASC_objects.Send_error, "len": 0, "field": []},
+               "Send_correct":
+                   {"num": 0xF1, "class": ASC_objects.Send_correct, "len": 0, "field": []}
                }
 
-ACS_ID = '0D0E0F101112131415161718'
+ACS_ID = '0D0E0F101112131415161718'  # SKUD1
+# ACS_ID = '25262728292A2B2C2D2E2F30'  # SKUD2
 
 
 def _create_hex(byte):
@@ -110,8 +116,10 @@ def convert_to_object(data: list):
 
                     if direction is not None:
                         result_obj = obj_class(ACS_ID, card_id, direction)
-                    else:
+                    elif card_id is not None:
                         result_obj = obj_class(ACS_ID, card_id)
+                    else:
+                        result_obj = obj_class(ACS_ID)
                     return result_obj
         else:
             print('Error, CRC')

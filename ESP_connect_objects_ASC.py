@@ -81,3 +81,13 @@ class Delete_ID(Object_ACS):
 
     def get_card_id(self):
         return self.card_id
+
+
+class Send_error(Object_ACS):
+    def __init__(self, acs_id):
+        super().__init__(acs_id=acs_id)
+
+
+class Send_correct(Object_ACS):
+    def __init__(self, acs_id):
+        super().__init__(acs_id=acs_id)

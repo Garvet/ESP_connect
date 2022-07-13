@@ -11,7 +11,7 @@ buffer_object_send = []
 correct_id = ['11223344', '01020304']
 
 USB_port = '/dev/ttyUSB0'
-# USB_port = '/dev/ttyUSB1'
+# USB_port = ['/dev/ttyUSB1', '/dev/ttyUSB2']
 
 if __name__ == '__main__':
     # подключаемся, указываем адрес API, ID устройства и пароль
@@ -47,6 +47,10 @@ if __name__ == '__main__':
                     #print(' - Проход запрещён')
                     buffer_object_send.append(ASC_objects.Passage_prohibition(
                         acs_id=obj.get_acs_id(), card_id=obj.get_card_id()))
+            elif isinstance(obj, ASC_objects.Send_error):
+                print(' - Отправка пакета произошла с ошибкой')
+            elif isinstance(obj, ASC_objects.Send_correct):
+                print(' + Пакет успешно отправлен')
         # Отправка пакета на ESP
         if len(buffer_object_send) != 0:
             Utr.send_data(ESP_intr.convert_to_packet(buffer_object_send.pop(0)))

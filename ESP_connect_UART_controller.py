@@ -89,16 +89,39 @@ def _uart_start_receive(data):
     _start_receive = True
 
 
+# (!) ----- \/ \/ \/ костыль защиты от зацикливания (КЗОЗ)
+_duct_tape_loop_protection = True
+_duct_tape_loop_protection_MAX = 10
+_duct_tape_loop_protection_amt = 0
+# (!) ----- /\ /\ /\
+
+
 def _uart_receive():
     # Осуществляет приём байта данных
     global _adr_receive
     global _end_receive
     global _start_receive
     global _uart
+    global _duct_tape_loop_protection_amt  # (!) ----- (КЗОЗ)
     # data = [int(byte) for byte in bytearray(uart.read(1))]
     if _start_receive:
         receive = bytearray(_uart.read(1))
         if len(receive) > 0:
+
+            # (!) ----- (КЗОЗ) \/ \/ \/ \/ \/
+            # Простая защита от зацикливания, по зацикливанию состояния
+            if _duct_tape_loop_protection:
+                if _uart_controller.get_stage() == Utc.Stage.Sent_length_byte:
+                    if _duct_tape_loop_protection_amt == _duct_tape_loop_protection_MAX:
+                        _duct_tape_loop_protection_amt = 0
+                        _uart_controller.send_status = Utc.Status.Error
+                        _uart_controller.stage = Utc.Stage.No_transmission
+                    else:
+                        _duct_tape_loop_protection_amt += 1
+                else:
+                    _duct_tape_loop_protection_amt = 0
+            # (!) ----- (КЗОЗ) /\ /\ /\ /\ /\
+
             _adr_receive[0] = int(receive[0])
             _start_receive = False
             _end_receive = True
@@ -150,10 +173,32 @@ def _handler_error_reception():
     _uart_controller.begin()
 
 
-def begin(port: str = "/dev/ttyUSB0"):
+def begin(ports='/dev/ttyUSB0'):
     global _uart
     global _uart_controller
-    _uart = serial.Serial(port, baudrate=115200, timeout=0)
+    if isinstance(ports, list):
+        port_list = [port for port in ports]
+    elif isinstance(ports, str):
+        port_list = [ports]
+    else:
+        port_list = '/dev/ttyUSB0'
+    connect_success = False
+    connect_port = None
+    for port in port_list:
+        try:
+            _uart = serial.Serial(port, baudrate=115200, timeout=0)
+            connect_success = True
+            connect_port = port
+            break
+        except serial.serialutil.SerialException:
+            # FileNotFoundError:
+            pass
+
+    if connect_success:
+        print('Connect to ' + connect_port)
+    else:
+        _uart = serial.Serial(port_list[0], baudrate=115200, timeout=0)
+
     _uart_controller = Utc.WireTransferController(_uart_send, _uart_start_receive)
     _uart_controller.begin()
     _uart.write([0])
